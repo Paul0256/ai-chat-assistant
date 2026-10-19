@@ -9,14 +9,19 @@ description = "AI chat assistant that answers customers from a business's own do
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "fastapi>=0.115,<1",
     "python-dotenv>=1.0",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "httpx>=0.27"]
 
 [tool.setuptools.packages.find]
 include = ["assistant*"]
+
+[tool.setuptools.package-data]
+assistant = ["adapters/web/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

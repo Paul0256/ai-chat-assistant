@@ -5,9 +5,9 @@ prices, policies, opening hours) and hands the conversation to a person when it
 doesn't know. Every exchange is logged, including the questions it couldn't
 answer, so the business sees what to add to its FAQ.
 
-**Status:** core, offline mock model, console and tests are done. The website
-chat window, the Claude adapter, handoff by email/Telegram and the Google
-Sheets log are next.
+**Status:** core, website chat window, offline mock model, console and tests
+are done. The Claude adapter, handoff by email/Telegram and the Google Sheets
+log are next.
 
 ## What it does
 
@@ -31,12 +31,26 @@ Requires Python 3.10+.
 pip install -r requirements-dev.txt
 python -m assistant demo      # scripted conversation with the demo dental clinic
 python -m assistant console   # chat yourself; :human, :log, :new, :quit
+python -m assistant web       # demo clinic website with the chat window: http://127.0.0.1:8000
 pytest
 ```
 
 The demo business lives in `demo/clinic/`: `business.json` (name, phone,
 emergency number) and `knowledge/*.md`. To try your own business, copy the
 folder, edit it, and run `python -m assistant console --business path/to/folder`.
+
+## Add it to a website
+
+One line before `</body>`:
+
+```html
+<script src="https://YOUR-SERVER/widget.js" data-title="Riverside Dental Studio" data-color="#0f766e" defer></script>
+```
+
+Start the server with the sites allowed to embed it:
+`python -m assistant web --business path/to/folder --origins https://www.clinic.com`.
+The window lives in a shadow root, so the site's CSS can't break it, and it
+never renders replies as HTML.
 
 ## How it works
 
@@ -52,6 +66,8 @@ assistant/
     storage.py          ConversationLog and HandoffNotifier interfaces + in-memory versions
   adapters/
     console.py          terminal chat and scripted demo
+    web/app.py          JSON API (/api/chat, /api/handoff, /api/greeting), per-IP limit, CORS
+    web/static/         widget.js (the chat window) and the demo clinic page
 demo/clinic/            fictional "Riverside Dental Studio"
 tests/
 ```

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Riverside Dental Studio (demo)</title>
+  <style>
+    body { margin: 0; font-family: Georgia, "Times New Roman", serif; color: #1d2b2a; background: #f4f8f7; }
+    .banner { background: #fff7d6; color: #6b5800; font: 14px system-ui, sans-serif; text-align: center; padding: 8px 16px; }
+    header { background: #0f766e; color: #fff; padding: 20px 24px; }
+    header h1 { margin: 0; font-size: 26px; }
+    header p { margin: 4px 0 0; opacity: .85; font-family: system-ui, sans-serif; }
+    main { max-width: 860px; margin: 0 auto; padding: 40px 24px 120px; }
+    h2 { color: #0f766e; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); font-family: system-ui, sans-serif; }
+    .card { background: #fff; border-radius: 12px; padding: 18px; border: 1px solid #dbe7e5; }
+    .card b { display: block; margin-bottom: 6px; }
+    .hint { font-family: system-ui, sans-serif; background: #fff; border-left: 4px solid #0f766e; padding: 14px 18px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="banner">Demo website of a fictional clinic. The chat in the corner is the product.</div>
+  <header>
+    <h1>Riverside Dental Studio</h1>
+    <p>Gentle, modern dentistry in Springfield · +1 555 0100</p>
+  </header>
+  <main>
+    <h2>Welcome</h2>
+    <p>Check-ups, cleaning, whitening, fillings, crowns and implants for the whole family.</p>
+    <div class="grid">
+      <div class="card"><b>Opening hours</b>Mon–Thu 8:00–18:00<br>Fri 8:00–15:00<br>Sat 9:00–13:00</div>
+      <div class="card"><b>Find us</b>48 Riverside Avenue, Springfield<br>Free parking behind the building</div>
+      <div class="card"><b>New patients</b>First visit about 45 minutes, with X-rays and a treatment plan</div>
+    </div>
+    <h2>Try the assistant</h2>
+    <p class="hint">Open the chat in the bottom-right corner and ask, for example: "How much is whitening?",
+      "Do you take BrightCare insurance?", "Do you sell gift cards?" or "Should I take ibuprofen?"</p>
+  </main>
+  <script src="/widget.js" data-title="Riverside Dental Studio" data-color="#0f766e" defer></script>
+</body>
+</html>
