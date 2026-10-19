@@ -1,0 +1,10 @@
+{
+  "name": "Riverside Dental Studio",
+  "assistant_name": "Riverside Assistant",
+  "phone": "+1 555 0100",
+  "email": "hello@riverside-dental.example",
+  "address": "48 Riverside Avenue, Springfield",
+  "emergency_number": "911",
+  "greeting": "Hi! I'm the Riverside Dental Studio assistant. Ask me about our services, prices, opening hours or booking. I can't give medical advice, but I can connect you with our team.",
+  "medical": true
+}
