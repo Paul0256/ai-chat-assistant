@@ -25,6 +25,7 @@ class ReplyKind(str, Enum):
     MEDICAL = "medical"  # asks for medical advice; the assistant never gives it
     EMERGENCY = "emergency"  # urgent; points to the phone or emergency services
     HANDOFF = "handoff"  # passed to a person
+    STAFF = "staff"  # a person from the team replied
     LIMITED = "limited"  # message too long, too many messages, daily cap reached
     ERROR = "error"  # something failed on our side
 
@@ -35,6 +36,13 @@ class Reply:
     text: str
     # Show a "Talk to a person" button under this reply.
     offer_handoff: bool = False
+
+
+@dataclass(frozen=True)
+class StaffMessage:
+    seq: int  # increases per conversation; the website asks for "everything after seq N"
+    text: str
+    timestamp: datetime
 
 
 @dataclass(frozen=True)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .adapters.notify import EmailNotifier, MultiNotifier, TelegramNotifier
 from .config import Settings
@@ -19,8 +19,20 @@ class App:
     conversation_log: ConversationLog
     notifier: HandoffNotifier
     warnings: list[str]
+    background: list = field(default_factory=list)  # threads to stop on shutdown
+
+    def start_staff_replies(self) -> None:
+        """Let staff answer from Telegram (only when Telegram handoff is configured)."""
+        from .adapters.staff_telegram import TelegramStaffListener
+
+        channels = self.notifier.notifiers if isinstance(self.notifier, MultiNotifier) else [self.notifier]
+        for channel in channels:
+            if isinstance(channel, TelegramNotifier):
+                self.background.append(TelegramStaffListener(channel, self.assistant).start())
 
     def close(self) -> None:
+        for worker in self.background:
+            worker.close()
         close = getattr(self.conversation_log, "close", None)
         if close is not None:
             close()

@@ -4,6 +4,7 @@
     GET  /api/greeting    first message shown when the window opens
     POST /api/chat        {"conversation_id": "...", "message": "..."}
     POST /api/handoff     {"conversation_id": "..."}  ("Talk to a person")
+    GET  /api/messages    ?conversation_id=...&after=N  staff replies since message N (polled)
     GET  /                demo page of the fictional clinic with the widget on it
 
 No business rules here: everything is decided by `Assistant`. The adapter only
@@ -19,7 +20,7 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -51,6 +52,15 @@ class ReplyOut(BaseModel):
         return cls(kind=reply.kind.value, text=reply.text, offer_handoff=reply.offer_handoff)
 
 
+class StaffMessageOut(BaseModel):
+    seq: int
+    text: str
+
+
+class MessagesOut(BaseModel):
+    messages: list[StaffMessageOut]
+
+
 class IpLimiter:
     def __init__(self, per_minute: int) -> None:
         self.per_minute = per_minute
@@ -75,9 +85,6 @@ def create_app(assistant: Assistant, allowed_origins: list[str] | None = None, p
             CORSMiddleware, allow_origins=allowed_origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type"]
         )
     limiter = IpLimiter(per_ip_per_minute)
-    # The core keeps conversations in memory and is not thread-safe; FastAPI runs
-    # sync work in a thread pool, so serialize calls into it.
-    lock = asyncio.Lock()
 
     def check(request: Request, conversation_id: str) -> None:
         if not CONVERSATION_ID.match(conversation_id):
@@ -93,18 +100,24 @@ def create_app(assistant: Assistant, allowed_origins: list[str] | None = None, p
     @app.post("/api/chat")
     async def chat(body: ChatIn, request: Request) -> ReplyOut:
         check(request, body.conversation_id)
-        async with lock:
-            reply = await asyncio.to_thread(assistant.ask, body.conversation_id, body.message, CHANNEL)
+        reply = await asyncio.to_thread(assistant.ask, body.conversation_id, body.message, CHANNEL)
         return ReplyOut.of(reply)
 
     @app.post("/api/handoff")
     async def handoff(body: HandoffIn, request: Request) -> ReplyOut:
         check(request, body.conversation_id)
-        async with lock:
-            reply = await asyncio.to_thread(
-                assistant.request_handoff, body.conversation_id, "Customer pressed the button", CHANNEL
-            )
+        reply = await asyncio.to_thread(
+            assistant.request_handoff, body.conversation_id, "Customer pressed the button", CHANNEL
+        )
         return ReplyOut.of(reply)
+
+    @app.get("/api/messages")
+    async def messages(conversation_id: str = Query(max_length=64), after: int = Query(0, ge=0)) -> MessagesOut:
+        # Polled every few seconds after a handoff; a cheap in-memory read, so no per-IP limit.
+        if not CONVERSATION_ID.match(conversation_id):
+            raise HTTPException(400, "Invalid conversation id")
+        found = assistant.messages_since(conversation_id, after)
+        return MessagesOut(messages=[StaffMessageOut(seq=m.seq, text=m.text) for m in found])
 
     @app.get("/widget.js")
     async def widget() -> FileResponse:

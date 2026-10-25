@@ -17,7 +17,9 @@ adapter is next.
   messages ("my face is swollen", "it won't stop bleeding") get the clinic's
   phone and the emergency number right away, before any model is asked.
 - **Talk to a person.** A button or a typed request passes the conversation,
-  with its transcript, to the team.
+  with its transcript, to the team. Staff reply to the Telegram notification and
+  the answer appears in the customer's chat window; the customer's further
+  messages go straight to the team.
 - **Protects the bill.** Message length limit, messages per minute per visitor
   and a daily cap for the whole business.
 - **Provider-independent.** The core never imports an AI SDK; Claude, OpenAI
@@ -65,6 +67,9 @@ Copy `.env.example` to `.env` (never commit it) and fill in what you need:
 - **"Talk to a person" for staff:** a Telegram bot from @BotFather
   (`HANDOFF_TELEGRAM_BOT_TOKEN` + the staff chat's `HANDOFF_TELEGRAM_CHAT_ID`)
   and/or email over SMTP. Check it with `python -m assistant test-handoff`.
+  Use a bot only for this assistant: it listens for staff replies with long
+  polling, so no public webhook is needed, and only replies from the configured
+  staff chat to its own notifications are accepted.
   If every channel fails, the customer gets the phone number and email instead
   of a promise nobody will keep.
 
@@ -86,6 +91,7 @@ assistant/
     web/static/         widget.js (the chat window) and the demo clinic page
     sheets.py           Google Sheets conversation log (background writer)
     notify.py           handoff to staff: Telegram, email, or both
+    staff_telegram.py   staff replies from Telegram back to the customer
   config.py, wiring.py  .env settings -> Assistant with the chosen log and channels
 demo/clinic/            fictional "Riverside Dental Studio"
 tests/
@@ -94,6 +100,12 @@ tests/
 The whole knowledge base goes into the model's context (with prompt caching),
 so there is no vector database. That covers up to roughly 150k tokens of
 documents, enough for almost any small business.
+
+## Limits of this version
+
+Conversations live in the server's memory: a restart forgets open
+conversations (the Google Sheets log keeps everything). Staff can answer from
+Telegram; email notifications are one-way.
 
 ## License
 

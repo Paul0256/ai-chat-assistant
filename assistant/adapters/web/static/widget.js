@@ -56,6 +56,8 @@
     ".bot{background:#fff;color:#16202e;border:1px solid #e3e8ef;align-self:flex-start;border-bottom-left-radius:4px}" +
     ".me{background:var(--c);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}" +
     ".warn{border-color:#f0b4b4;background:#fff5f5}" +
+    ".staff{background:#eef8f2;border-color:#b7e1c8}" +
+    ".who{display:block;font-size:11.5px;font-weight:600;color:#3a7d57;margin-bottom:3px}" +
     ".human{align-self:flex-start;background:#fff;border:1px solid var(--c);color:var(--c);border-radius:99px;padding:7px 14px;" +
     "font-size:13.5px;cursor:pointer}" +
     ".typing{align-self:flex-start;color:#7b8794;font-size:13px}" +
@@ -112,6 +114,44 @@
     var warn = reply.kind === "emergency" || reply.kind === "error";
     add(reply.text, "bot", warn ? "warn" : "");
     if (reply.offer_handoff) addHumanButton();
+    if (reply.kind === "handoff") startPolling();
+  }
+
+  // After a handoff, staff replies arrive here (the team answers from Telegram).
+  var seqKey = "ai-chat-staff-seq";
+  var lastSeq = 0;
+  var polling = null;
+  try { lastSeq = parseInt(sessionStorage.getItem(seqKey) || "0", 10) || 0; } catch (e) {}
+
+  function addStaff(text) {
+    var el = add("", "bot", "staff");
+    var who = document.createElement("span");
+    who.className = "who";
+    who.textContent = "Team";
+    el.appendChild(who);
+    el.appendChild(document.createTextNode(text));
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function poll() {
+    fetch(api + "/api/messages?conversation_id=" + encodeURIComponent(cid) + "&after=" + lastSeq)
+      .then(function (r) { return r.ok ? r.json() : { messages: [] }; })
+      .then(function (data) {
+        data.messages.forEach(function (m) {
+          if (m.seq <= lastSeq) return;
+          lastSeq = m.seq;
+          addStaff(m.text);
+          if (!panel.classList.contains("open")) open();
+        });
+        try { sessionStorage.setItem(seqKey, String(lastSeq)); sessionStorage.setItem("ai-chat-handoff", "1"); } catch (e) {}
+      })
+      .catch(function () {});
+  }
+
+  function startPolling() {
+    if (polling) return;
+    poll();
+    polling = setInterval(poll, 5000);
   }
 
   function call(path, body) {
@@ -154,6 +194,8 @@
         .catch(function () { add("Hi! How can I help?", "bot"); });
     }
   }
+
+  try { if (sessionStorage.getItem("ai-chat-handoff") === "1") startPolling(); } catch (e) {}
 
   root.querySelector(".launcher").addEventListener("click", function () {
     panel.classList.contains("open") ? panel.classList.remove("open") : open();

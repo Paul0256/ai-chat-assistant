@@ -63,6 +63,7 @@ def run_web(settings: Settings, host: str, port: int) -> None:
     from .wiring import build_app
 
     app = build_app(settings)
+    app.start_staff_replies()
     for warning in app.warnings:
         print(f"Note: {warning}")
     print(f"Model: {settings.model}. Demo page: http://{host}:{port}/")

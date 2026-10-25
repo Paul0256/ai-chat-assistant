@@ -10,7 +10,9 @@ import json
 import logging
 import smtplib
 import ssl
+import threading
 import urllib.request
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from email.message import EmailMessage
 
@@ -52,21 +54,44 @@ class TelegramNotifier:
     Plain text only (no parse_mode), so nothing a customer types can change the formatting.
     """
 
+    REMEMBER = 2000  # notifications staff can still reply to
+
     def __init__(
         self, token: str, chat_id: str, business_name: str, post: Callable[[str, dict], dict] = _post_json
     ) -> None:
-        self._url = f"https://api.telegram.org/bot{token}/sendMessage"
-        self.chat_id = chat_id
+        self.api = f"https://api.telegram.org/bot{token}"
+        self.chat_id = str(chat_id)
         self.business_name = business_name
         self._post = post
+        # Telegram message id of each notification -> conversation id, so a staff
+        # member's reply to that message can be routed back to the customer.
+        self.sent: OrderedDict[int, str] = OrderedDict()
+        self._lock = threading.Lock()
 
     def notify(self, request: HandoffRequest) -> None:
-        text = format_handoff(request, self.business_name)
+        text = format_handoff(request, self.business_name) + "\n\nReply to this message to answer the customer."
         if len(text) > TELEGRAM_LIMIT:
             text = text[: TELEGRAM_LIMIT - 20] + "\n… (shortened)"
-        result = self._post(self._url, {"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True})
+        result = self.send(text)
+        message_id = (result.get("result") or {}).get("message_id")
+        if message_id is not None:
+            with self._lock:
+                self.sent[int(message_id)] = request.conversation_id
+                while len(self.sent) > self.REMEMBER:
+                    self.sent.popitem(last=False)
+
+    def send(self, text: str, reply_to: int | None = None) -> dict:
+        payload: dict = {"chat_id": self.chat_id, "text": text, "disable_web_page_preview": True}
+        if reply_to is not None:
+            payload["reply_to_message_id"] = reply_to
+        result = self._post(f"{self.api}/sendMessage", payload)
         if not result.get("ok"):
             raise RuntimeError(f"Telegram refused the message: {result.get('description', 'unknown error')}")
+        return result
+
+    def conversation_for(self, message_id: int) -> str | None:
+        with self._lock:
+            return self.sent.get(message_id)
 
 
 class EmailNotifier:

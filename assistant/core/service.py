@@ -6,11 +6,17 @@ Order of checks for each message:
 3. the model answers from the documents, or says it doesn't know, or declines
    medical advice; the core turns that into the final reply;
 4. every exchange is logged, unanswered questions included.
+
+After a handoff the conversation belongs to the team: the customer's next
+messages go straight to staff (the model stays quiet), and staff replies are
+queued for the website to pick up (`messages_since`).
 """
 
 from __future__ import annotations
 
+import functools
 import logging
+import threading
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,7 +26,7 @@ from . import safety
 from .business import Business
 from .knowledge import KnowledgeBase
 from .llm.base import AnswerKind, AnswerRequest, LanguageModel
-from .models import HandoffRequest, LogEntry, Reply, ReplyKind, Role, Turn
+from .models import HandoffRequest, LogEntry, Reply, ReplyKind, Role, StaffMessage, Turn
 from .storage import ConversationLog, HandoffNotifier
 
 log = logging.getLogger(__name__)
@@ -33,6 +39,18 @@ class Limits:
     per_day: int = 500  # messages for the whole business
     history_turns: int = 12  # turns sent back to the model
     idle_minutes: int = 120  # a conversation is forgotten after this
+    handoff_idle_minutes: int = 24 * 60  # ...but staff may take hours to reply
+
+
+def _locked(method):
+    """Adapters call the assistant from several threads (web requests, the Telegram staff listener)."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 
 class _Conversation:
@@ -40,6 +58,9 @@ class _Conversation:
         self.turns: deque[Turn] = deque(maxlen=history_turns)
         self.recent: deque[datetime] = deque()
         self.last_seen: datetime | None = None
+        self.handed_off = False
+        self.channel = "web"
+        self.staff_messages: list[StaffMessage] = []
 
 
 class Assistant:
@@ -63,6 +84,7 @@ class Assistant:
         self._conversations: dict[str, _Conversation] = {}
         self._day: date | None = None
         self._day_count = 0
+        self._lock = threading.RLock()
 
     # ---- entry points ---------------------------------------------------------
 
@@ -71,29 +93,39 @@ class Assistant:
 
     def ask(self, conversation_id: str, text: str, channel: str = "web") -> Reply:
         text = text.strip()
-        now = self.clock()
-        conv = self._conversation(conversation_id, now)
+        # Decide under the lock, but call the model outside it: a slow AI answer
+        # for one visitor must not hold up everyone else.
+        with self._lock:
+            now = self.clock()
+            conv = self._conversation(conversation_id, now)
+            limited = self._check_limits(conv, text, now)
+            if limited is not None:
+                return limited  # not logged: nothing was answered, and spam would flood the log
+            if self.business.medical and safety.is_emergency(text):
+                reply: Reply | None = self._emergency()
+            elif conv.handed_off:
+                reply = self._forward_to_staff(conversation_id, conv, text, channel, now)
+            elif safety.wants_human(text):
+                conv.turns.append(Turn(Role.CUSTOMER, text))
+                # request_handoff records the reply and logs the exchange itself
+                return self.request_handoff(
+                    conversation_id, reason="Customer asked for a person", channel=channel, question=text
+                )
+            else:
+                reply = None
+                request = AnswerRequest(self.business, self.knowledge, tuple(conv.turns), text)
 
-        limited = self._check_limits(conv, text, now)
-        if limited is not None:
-            return limited  # not logged: nothing was answered, and spam would flood the log
+        if reply is None:
+            reply = self._answer(request)
 
-        if self.business.medical and safety.is_emergency(text):
-            reply = self._emergency()
-        elif safety.wants_human(text):
+        with self._lock:
+            conv = self._conversation(conversation_id, self.clock())
             conv.turns.append(Turn(Role.CUSTOMER, text))
-            # request_handoff records the reply and logs the exchange itself
-            return self.request_handoff(
-                conversation_id, reason="Customer asked for a person", channel=channel, question=text
-            )
-        else:
-            reply = self._answer(conv, text)
-
-        conv.turns.append(Turn(Role.CUSTOMER, text))
-        conv.turns.append(Turn(Role.ASSISTANT, reply.text))
-        self._log(now, conversation_id, channel, text, reply)
+            conv.turns.append(Turn(Role.ASSISTANT, reply.text))
+            self._log(now, conversation_id, channel, text, reply)
         return reply
 
+    @_locked
     def request_handoff(
         self, conversation_id: str, reason: str, channel: str = "web", question: str | None = None
     ) -> Reply:
@@ -106,6 +138,8 @@ class Assistant:
         except Exception:
             log.exception("handoff notification failed for %s", conversation_id)
             return Reply(ReplyKind.ERROR, self._contact_fallback())
+        conv.handed_off = True
+        conv.channel = channel
         b = self.business
         reply = Reply(
             ReplyKind.HANDOFF,
@@ -116,10 +150,49 @@ class Assistant:
         self._log(now, conversation_id, channel, question or f"[handoff] {reason}", reply)
         return reply
 
+    @_locked
+    def staff_reply(self, conversation_id: str, text: str) -> bool:
+        """A person from the team answered (e.g. replied to the Telegram notification).
+
+        Returns False if the conversation is gone (the customer left long ago).
+        """
+        text = text.strip()
+        now = self.clock()
+        self._expire(now)
+        conv = self._conversations.get(conversation_id)
+        if conv is None or not text:
+            return False
+        message = StaffMessage(len(conv.staff_messages) + 1, text, now)
+        conv.staff_messages.append(message)
+        conv.turns.append(Turn(Role.STAFF, text))
+        conv.last_seen = now
+        self._log(now, conversation_id, conv.channel, "[staff reply]", Reply(ReplyKind.STAFF, text))
+        return True
+
+    @_locked
+    def messages_since(self, conversation_id: str, after: int = 0) -> list[StaffMessage]:
+        """Staff replies the customer hasn't seen yet (the website polls this)."""
+        conv = self._conversations.get(conversation_id)
+        if conv is None:
+            return []
+        return [m for m in conv.staff_messages if m.seq > after]
+
     # ---- internals ------------------------------------------------------------
 
-    def _answer(self, conv: _Conversation, text: str) -> Reply:
-        request = AnswerRequest(self.business, self.knowledge, tuple(conv.turns), text)
+    def _forward_to_staff(
+        self, conversation_id: str, conv: _Conversation, text: str, channel: str, now: datetime
+    ) -> Reply:
+        request = HandoffRequest(
+            now, conversation_id, channel, "The customer wrote again", (Turn(Role.CUSTOMER, text),)
+        )
+        try:
+            self.notifier.notify(request)
+        except Exception:
+            log.exception("forwarding to staff failed for %s", conversation_id)
+            return Reply(ReplyKind.ERROR, self._contact_fallback())
+        return Reply(ReplyKind.HANDOFF, "Thanks, I've passed this to our team too. They will reply here.")
+
+    def _answer(self, request: AnswerRequest) -> Reply:
         try:
             result = self.model.answer(request)
         except Exception:
@@ -172,10 +245,19 @@ class Assistant:
         self._day_count += 1
         return None
 
-    def _conversation(self, conversation_id: str, now: datetime) -> _Conversation:
-        idle = timedelta(minutes=self.limits.idle_minutes)
-        for cid in [c for c, v in self._conversations.items() if v.last_seen and now - v.last_seen > idle]:
+    def _expire(self, now: datetime) -> None:
+        normal = timedelta(minutes=self.limits.idle_minutes)
+        handed_off = timedelta(minutes=self.limits.handoff_idle_minutes)
+        stale = [
+            cid
+            for cid, conv in self._conversations.items()
+            if conv.last_seen and now - conv.last_seen > (handed_off if conv.handed_off else normal)
+        ]
+        for cid in stale:
             del self._conversations[cid]
+
+    def _conversation(self, conversation_id: str, now: datetime) -> _Conversation:
+        self._expire(now)
         conv = self._conversations.setdefault(conversation_id, _Conversation(self.limits.history_turns))
         conv.last_seen = now
         return conv
