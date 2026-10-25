@@ -5,9 +5,9 @@ prices, policies, opening hours) and hands the conversation to a person when it
 doesn't know. Every exchange is logged, including the questions it couldn't
 answer, so the business sees what to add to its FAQ.
 
-**Status:** core, website chat window, offline mock model, console and tests
-are done. The Claude adapter, handoff by email/Telegram and the Google Sheets
-log are next.
+**Status:** core, website chat window, Google Sheets log, handoff to staff by
+Telegram or email, offline mock model, console and tests are done. The Claude
+adapter is next.
 
 ## What it does
 
@@ -52,6 +52,22 @@ Start the server with the sites allowed to embed it:
 The window lives in a shadow root, so the site's CSS can't break it, and it
 never renders replies as HTML.
 
+## Setup for a real business
+
+Copy `.env.example` to `.env` (never commit it) and fill in what you need:
+
+- **Google Sheets log:** the same service-account setup as
+  [telegram-points-bot](https://github.com/Paul0256/telegram-points-bot#3-google-cloud-project-sheets-api-service-account):
+  share the sheet with the service account, set `SPREADSHEET_ID`, then run
+  `python -m assistant setup-sheet`. You get a `Conversations` tab and an
+  `Unanswered` tab (a formula listing every question the documents didn't cover).
+  Rows are written in the background, so Google never slows down a reply.
+- **"Talk to a person" for staff:** a Telegram bot from @BotFather
+  (`HANDOFF_TELEGRAM_BOT_TOKEN` + the staff chat's `HANDOFF_TELEGRAM_CHAT_ID`)
+  and/or email over SMTP. Check it with `python -m assistant test-handoff`.
+  If every channel fails, the customer gets the phone number and email instead
+  of a promise nobody will keep.
+
 ## How it works
 
 ```
@@ -68,6 +84,9 @@ assistant/
     console.py          terminal chat and scripted demo
     web/app.py          JSON API (/api/chat, /api/handoff, /api/greeting), per-IP limit, CORS
     web/static/         widget.js (the chat window) and the demo clinic page
+    sheets.py           Google Sheets conversation log (background writer)
+    notify.py           handoff to staff: Telegram, email, or both
+  config.py, wiring.py  .env settings -> Assistant with the chosen log and channels
 demo/clinic/            fictional "Riverside Dental Studio"
 tests/
 ```
