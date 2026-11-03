@@ -8,6 +8,13 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 
+def clean_key(value: str) -> str:
+    """Forgive common paste mistakes: quotes, spaces, or "x-api-key: " / "NAME=" before the key."""
+    value = value.strip().strip("\"'").strip()
+    start = value.find("sk-ant-")
+    return value[start:] if start > 0 else value
+
+
 def _list(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
@@ -43,7 +50,7 @@ class Settings:
         return cls(
             business_folder=env("BUSINESS_FOLDER", "demo/clinic"),
             model=env("MODEL", "mock").strip().lower(),
-            anthropic_api_key=(env("ANTHROPIC_API_KEY") or env("ASSISTANT_ANTHROPIC_API_KEY") or "").strip(),
+            anthropic_api_key=clean_key(env("ANTHROPIC_API_KEY") or env("ASSISTANT_ANTHROPIC_API_KEY") or ""),
             claude_model=env("CLAUDE_MODEL", "claude-sonnet-5-5").strip(),
             claude_effort=env("CLAUDE_EFFORT", "low").strip().lower(),
             allowed_origins=_list(env("ALLOWED_ORIGINS", "")),

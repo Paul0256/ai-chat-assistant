@@ -113,18 +113,21 @@ def check_claude(settings: Settings) -> None:
 
     import anthropic
 
-    key = settings.anthropic_api_key
     source = next((n for n in ("ANTHROPIC_API_KEY", "ASSISTANT_ANTHROPIC_API_KEY") if os.environ.get(n)), None)
+    raw = os.environ.get(source, "") if source else ""
+    key = settings.anthropic_api_key
+    if raw and raw != key:
+        print(f"Note: removed {len(raw) - len(key)} extra characters around the key (quotes, spaces or a label).")
     if not key:
         raise SystemExit("No key: set ANTHROPIC_API_KEY or ASSISTANT_ANTHROPIC_API_KEY in .env or the environment.")
     # The type part (e.g. "sk-ant-api03") is not secret; the rest is.
     parts = key.split("-")
     kind = "-".join(parts[:3]) if len(parts) > 3 and parts[0] == "sk" else "(not an sk-... key)"
     print(f"Key from {source}: {len(key)} characters, type {kind}")
-    if "=" in key:
+    if "=" in raw:
         print("Warning: the value contains '='. Put only the key after the variable name, not NAME=key again.")
-    if not key.startswith("sk-") and "sk-ant-" in key:
-        print(f"Warning: 'sk-ant-' starts at character {key.index('sk-ant-') + 1}; something is pasted before the key.")
+    if not raw.startswith("sk-") and "sk-ant-" in raw:
+        print(f"Note: 'sk-ant-' starts at character {raw.index('sk-ant-') + 1}; the text before it is ignored.")
     if any(c in key for c in "\"' \t"):
         print("Warning: the key contains quotes or spaces; paste it without them.")
     for name in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):

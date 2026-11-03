@@ -81,3 +81,13 @@ def test_claude_is_built_from_settings(clean_env, monkeypatch):
     model = build_app(settings).assistant.model
     assert isinstance(model, ClaudeModel) and model.name == "claude-sonnet-5-5" and model.effort == "medium"
     assert model.client.api_key == "test-key"
+
+
+@pytest.mark.parametrize(
+    "pasted",
+    ["sk-ant-api03-abc", " sk-ant-api03-abc ", '"sk-ant-api03-abc"', "x-api-key: sk-ant-api03-abc",
+     "ANTHROPIC_API_KEY=sk-ant-api03-abc"],
+)  # fmt: skip
+def test_common_paste_mistakes_around_the_key_are_forgiven(clean_env, monkeypatch, pasted):
+    monkeypatch.setenv("ASSISTANT_ANTHROPIC_API_KEY", pasted)
+    assert Settings.from_env().anthropic_api_key == "sk-ant-api03-abc"
