@@ -60,3 +60,18 @@ def test_daily_cap_comes_from_settings():
 def test_unknown_model_is_a_clear_error():
     with pytest.raises(ValueError, match="Unknown MODEL"):
         build_app(Settings(business_folder=str(DEMO), model="gpt-9"))
+
+
+def test_claude_needs_an_api_key(clean_env, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(SystemExit, match="ANTHROPIC_API_KEY"):
+        build_app(Settings(business_folder=str(DEMO), model="claude"))
+
+
+def test_claude_is_built_from_settings(clean_env, monkeypatch):
+    from assistant.adapters.claude import ClaudeModel
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    app = build_app(Settings(business_folder=str(DEMO), model="claude", claude_effort="medium"))
+    model = app.assistant.model
+    assert isinstance(model, ClaudeModel) and model.name == "claude-sonnet-5-5" and model.effort == "medium"

@@ -5,6 +5,7 @@ python -m assistant console         chat in the terminal
 python -m assistant web             website chat window + demo page (reads .env)
 python -m assistant setup-sheet     create the Conversations and Unanswered tabs
 python -m assistant test-handoff    send a test "Customer wants a person" message to staff
+python -m assistant eval            run the business's test questions through the model (reads .env)
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ def main() -> None:
         ("web", "serve the website chat window and the demo page"),
         ("setup-sheet", "create the Google Sheets tabs"),
         ("test-handoff", "send a test handoff message to staff"),
+        ("eval", "run the test questions through the model and check the replies"),
     ]:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--business", help="folder with business.json and knowledge/ (default: BUSINESS_FOLDER)")
@@ -33,6 +35,9 @@ def main() -> None:
             p.add_argument("--host", default="127.0.0.1")
             p.add_argument("--port", type=int, default=8000)
             p.add_argument("--origins", help="comma-separated websites allowed to embed the widget")
+        if name == "eval":
+            p.add_argument("--questions", help="JSON test questions (default: <business>/test_questions.json)")
+            p.add_argument("--csv", default="eval-results.csv", help="where to write the details")
     args = parser.parse_args()
 
     settings = Settings.from_env()
@@ -51,6 +56,8 @@ def main() -> None:
         run_web(settings, args.host, args.port)
     elif args.command == "setup-sheet":
         setup_sheet(settings)
+    elif args.command == "eval":
+        evaluate(settings, args.questions, args.csv)
     else:
         test_handoff(settings)
 
@@ -76,6 +83,24 @@ def run_web(settings: Settings, host: str, port: int) -> None:
         )
     finally:
         app.close()  # writes log rows that are still waiting
+
+
+def evaluate(settings: Settings, questions: str | None, csv_path: str) -> None:
+    from pathlib import Path
+
+    from .evaluate import report, run
+    from .wiring import build_model
+
+    model = build_model(settings)
+    print(f"Model: {model.name}. Running the test questions...")
+    results = run(settings.business_folder, model, Path(questions) if questions else None)
+    print(report(results, Path(csv_path)))
+    usage = getattr(model, "usage", None)
+    if usage is not None and usage.requests:
+        print(
+            f"Cost: ~${usage.cost_usd:.3f} for {usage.requests} model calls "
+            f"(~${usage.cost_usd / usage.requests:.4f} per answer; cache read {usage.cache_read:,} tokens)"
+        )
 
 
 def setup_sheet(settings: Settings) -> None:

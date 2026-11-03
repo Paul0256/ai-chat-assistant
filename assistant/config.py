@@ -16,6 +16,9 @@ def _list(value: str) -> list[str]:
 class Settings:
     business_folder: str = "demo/clinic"
     model: str = "mock"
+    # MODEL=claude: the key comes from ANTHROPIC_API_KEY, read by the Anthropic SDK itself.
+    claude_model: str = "claude-sonnet-5-5"
+    claude_effort: str = "low"
     allowed_origins: list[str] = field(default_factory=list)
     daily_message_cap: int = 500
     # Google Sheets log (optional)
@@ -38,6 +41,8 @@ class Settings:
         return cls(
             business_folder=env("BUSINESS_FOLDER", "demo/clinic"),
             model=env("MODEL", "mock").strip().lower(),
+            claude_model=env("CLAUDE_MODEL", "claude-sonnet-5-5").strip(),
+            claude_effort=env("CLAUDE_EFFORT", "low").strip().lower(),
             allowed_origins=_list(env("ALLOWED_ORIGINS", "")),
             daily_message_cap=int(env("DAILY_MESSAGE_CAP", "500")),
             spreadsheet_id=env("SPREADSHEET_ID", "").strip(),

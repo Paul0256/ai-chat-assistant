@@ -19,6 +19,8 @@ class AnswerKind(str, Enum):
     ANSWER = "answer"
     NOT_FOUND = "not_found"
     MEDICAL = "medical"
+    # A model can recognise urgency in any language; the core's own check is English only.
+    EMERGENCY = "emergency"
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,7 @@ class ModelAnswer:
     kind: AnswerKind
     # Written by the model in the customer's language. Empty means "use the
     # core's standard wording" (the mock leaves it empty for NOT_FOUND/MEDICAL).
+    # An EMERGENCY text is used only if it contains the business's phone number.
     text: str = ""
 
 

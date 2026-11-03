@@ -5,9 +5,9 @@ prices, policies, opening hours) and hands the conversation to a person when it
 doesn't know. Every exchange is logged, including the questions it couldn't
 answer, so the business sees what to add to its FAQ.
 
-**Status:** core, website chat window, Google Sheets log, handoff to staff by
-Telegram or email, offline mock model, console and tests are done. The Claude
-adapter is next.
+**Status:** core, Claude adapter, website chat window, Google Sheets log,
+handoff to staff by Telegram or email, offline mock model, test-question runner,
+console and tests are done.
 
 ## What it does
 
@@ -22,6 +22,8 @@ adapter is next.
   messages go straight to the team.
 - **Protects the bill.** Message length limit, messages per minute per visitor
   and a daily cap for the whole business.
+- **Replies in the customer's language.** With Claude, a question in Spanish
+  gets an answer in Spanish from the same English documents.
 - **Provider-independent.** The core never imports an AI SDK; Claude, OpenAI
   or the offline mock plug in through one small interface.
 
@@ -58,6 +60,21 @@ never renders replies as HTML.
 
 Copy `.env.example` to `.env` (never commit it) and fill in what you need:
 
+- **Claude:** create an API key at console.anthropic.com, set a monthly spend
+  limit there, then put `MODEL=claude` and `ANTHROPIC_API_KEY=...` in `.env`.
+  The default is Claude Sonnet 5.5 at low effort, which suits a FAQ chat. The
+  rules and the documents form one cached system prompt, so each further
+  message pays about a tenth for them, and Claude replies in a fixed JSON shape
+  (answer, not found, medical, emergency), so the core's safety handling works
+  the same as with the mock.
+- **Test questions:** `python -m assistant eval` sends the business's
+  `test_questions.json` (the demo clinic has 43: prices, hours, questions the
+  documents don't cover, medical advice, emergencies, other languages, attempts
+  to override the rules) through the configured model, checks each reply's kind
+  and required words, prints the cost per answer and writes `eval-results.csv`.
+  Nothing reaches the staff channels or the Google Sheet. Run it before handing
+  a bot over and after every change to the documents.
+
 - **Google Sheets log:** the same service-account setup as
   [telegram-points-bot](https://github.com/Paul0256/telegram-points-bot#3-google-cloud-project-sheets-api-service-account):
   share the sheet with the service account, set `SPREADSHEET_ID`, then run
@@ -86,13 +103,15 @@ assistant/
     llm/mock.py         offline keyword-matching model for demos and tests
     storage.py          ConversationLog and HandoffNotifier interfaces + in-memory versions
   adapters/
+    claude.py           Claude through the Anthropic API (cached prompt, JSON replies)
     console.py          terminal chat and scripted demo
     web/app.py          JSON API (/api/chat, /api/handoff, /api/greeting), per-IP limit, CORS
     web/static/         widget.js (the chat window) and the demo clinic page
     sheets.py           Google Sheets conversation log (background writer)
     notify.py           handoff to staff: Telegram, email, or both
     staff_telegram.py   staff replies from Telegram back to the customer
-  config.py, wiring.py  .env settings -> Assistant with the chosen log and channels
+  config.py, wiring.py  .env settings -> Assistant with the chosen model, log and channels
+  evaluate.py           runs test questions through the model and checks the replies
 demo/clinic/            fictional "Riverside Dental Studio"
 tests/
 ```

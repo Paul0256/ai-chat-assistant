@@ -201,6 +201,10 @@ class Assistant:
         b = self.business
         if result.kind is AnswerKind.ANSWER and result.text:
             return Reply(ReplyKind.ANSWER, result.text)
+        if result.kind is AnswerKind.EMERGENCY:
+            if b.phone in result.text:
+                return Reply(ReplyKind.EMERGENCY, result.text)
+            return self._emergency()
         if result.kind is AnswerKind.MEDICAL:
             return Reply(
                 ReplyKind.MEDICAL,
