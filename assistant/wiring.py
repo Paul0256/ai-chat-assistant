@@ -51,7 +51,10 @@ def build_model(settings: Settings):
 
         from .adapters.claude import ClaudeModel  # imported only when used: the mock runs without the SDK
 
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0, max_retries=2)
+        # base_url is fixed: a host's own ANTHROPIC_BASE_URL (e.g. Claude Code's) must not redirect the bot.
+        client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key, base_url="https://api.anthropic.com", timeout=30.0, max_retries=2
+        )
         return ClaudeModel(client, model=settings.claude_model, effort=settings.claude_effort)
     raise ValueError(f"Unknown MODEL {settings.model!r}. Available: mock, claude.")
 

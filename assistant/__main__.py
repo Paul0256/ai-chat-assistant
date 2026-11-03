@@ -6,6 +6,7 @@ python -m assistant web             website chat window + demo page (reads .env)
 python -m assistant setup-sheet     create the Conversations and Unanswered tabs
 python -m assistant test-handoff    send a test "Customer wants a person" message to staff
 python -m assistant eval            run the business's test questions through the model (reads .env)
+python -m assistant check-claude    check the Anthropic API key with one tiny request
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ def main() -> None:
         ("setup-sheet", "create the Google Sheets tabs"),
         ("test-handoff", "send a test handoff message to staff"),
         ("eval", "run the test questions through the model and check the replies"),
+        ("check-claude", "check the Anthropic API key with one tiny request"),
     ]:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--business", help="folder with business.json and knowledge/ (default: BUSINESS_FOLDER)")
@@ -58,6 +60,8 @@ def main() -> None:
         setup_sheet(settings)
     elif args.command == "eval":
         evaluate(settings, args.questions, args.csv)
+    elif args.command == "check-claude":
+        check_claude(settings)
     else:
         test_handoff(settings)
 
@@ -101,6 +105,45 @@ def evaluate(settings: Settings, questions: str | None, csv_path: str) -> None:
             f"Cost: ~${usage.cost_usd:.3f} for {usage.requests} model calls "
             f"(~${usage.cost_usd / usage.requests:.4f} per answer; cache read {usage.cache_read:,} tokens)"
         )
+
+
+def check_claude(settings: Settings) -> None:
+    """Says what is wrong with the key without ever printing it."""
+    import os
+
+    import anthropic
+
+    key = settings.anthropic_api_key
+    source = next((n for n in ("ANTHROPIC_API_KEY", "ASSISTANT_ANTHROPIC_API_KEY") if os.environ.get(n)), None)
+    if not key:
+        raise SystemExit("No key: set ANTHROPIC_API_KEY or ASSISTANT_ANTHROPIC_API_KEY in .env or the environment.")
+    print(f"Key from {source}: {len(key)} characters, starts with sk-ant-api: {key.startswith('sk-ant-api')}")
+    if any(c in key for c in "\"' \t"):
+        print("Warning: the key contains quotes or spaces; paste it without them.")
+    for name in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
+        if os.environ.get(name):
+            print(f"Note: {name} is set in the environment; the assistant ignores it.")
+    client = anthropic.Anthropic(api_key=key, base_url="https://api.anthropic.com", timeout=30.0, max_retries=0)
+    try:
+        reply = client.messages.create(
+            model=settings.claude_model,
+            max_tokens=200,
+            output_config={"effort": "low"},
+            messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+        )
+    except anthropic.AuthenticationError as exc:
+        raise SystemExit(f"The API rejected the key: {exc.message}. Create a new key and paste it whole.") from None
+    except anthropic.PermissionDeniedError as exc:
+        raise SystemExit(f"The key has no access: {exc.message}") from None
+    except anthropic.NotFoundError as exc:
+        raise SystemExit(f"Model {settings.claude_model!r} not found: {exc.message}") from None
+    except anthropic.APIConnectionError as exc:
+        raise SystemExit(f"Could not reach api.anthropic.com: {exc}") from None
+    text = next((b.text for b in reply.content if b.type == "text"), "")
+    print(
+        f"OK: {settings.claude_model} replied {text.strip()!r} ({reply.usage.input_tokens} in, "
+        f"{reply.usage.output_tokens} out tokens)."
+    )
 
 
 def setup_sheet(settings: Settings) -> None:
