@@ -1,0 +1,22 @@
+# Public demo behind an existing Caddy (see deploy/README.md).
+# No port is published: Caddy reaches the container over its Docker network.
+
+services:
+  ai-demo:
+    build:
+      context: ..
+    env_file: ../.env
+    restart: unless-stopped
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  proxy:
+    external: true
+    # The Docker network of the Caddy container (`docker network ls`), set in .env.
+    name: ${PROXY_NETWORK:?Set PROXY_NETWORK in .env to the Caddy container's network}

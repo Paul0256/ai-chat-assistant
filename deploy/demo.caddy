@@ -1,0 +1,9 @@
+# Caddy site for the public demo. Copy to the directory the main Caddyfile
+# imports (e.g. /opt/caddy-sites/) and reload Caddy.
+demo.pulauskas.dev {
+	encode zstd gzip
+	reverse_proxy ai-demo:8000
+	log {
+		output discard
+	}
+}

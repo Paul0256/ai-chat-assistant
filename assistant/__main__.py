@@ -37,6 +37,11 @@ def main() -> None:
             p.add_argument("--host", default="127.0.0.1")
             p.add_argument("--port", type=int, default=8000)
             p.add_argument("--origins", help="comma-separated websites allowed to embed the widget")
+            p.add_argument(
+                "--behind-proxy",
+                action="store_true",
+                help="trust X-Forwarded-For from a reverse proxy (only when the port is not public)",
+            )
         if name == "eval":
             p.add_argument("--questions", help="JSON test questions (default: <business>/test_questions.json)")
             p.add_argument("--csv", default="eval-results.csv", help="where to write the details")
@@ -55,7 +60,7 @@ def main() -> None:
             settings = dataclasses.replace(
                 settings, allowed_origins=[o.strip() for o in args.origins.split(",") if o.strip()]
             )
-        run_web(settings, args.host, args.port)
+        run_web(settings, args.host, args.port, args.behind_proxy)
     elif args.command == "setup-sheet":
         setup_sheet(settings)
     elif args.command == "eval":
@@ -66,7 +71,7 @@ def main() -> None:
         test_handoff(settings)
 
 
-def run_web(settings: Settings, host: str, port: int) -> None:
+def run_web(settings: Settings, host: str, port: int, behind_proxy: bool = False) -> None:
     # Imported here so the console and the core tests run without web dependencies.
     import uvicorn
 
@@ -84,6 +89,10 @@ def run_web(settings: Settings, host: str, port: int) -> None:
             host=host,
             port=port,
             log_level="warning",
+            # Behind Caddy every request comes from the proxy's address; the per-visitor
+            # limit needs the real one, which the proxy puts in X-Forwarded-For.
+            proxy_headers=behind_proxy,
+            forwarded_allow_ips="*" if behind_proxy else None,
         )
     finally:
         app.close()  # writes log rows that are still waiting

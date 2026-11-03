@@ -90,6 +90,12 @@ Copy `.env.example` to `.env` (never commit it) and fill in what you need:
   If every channel fails, the customer gets the phone number and email instead
   of a promise nobody will keep.
 
+## Run it on a server
+
+`Dockerfile` and `deploy/` run the website chat window behind an existing
+Caddy reverse proxy, with automatic HTTPS and the per-visitor limit using the
+real client address. Steps: [deploy/README.md](deploy/README.md).
+
 ## How it works
 
 ```
