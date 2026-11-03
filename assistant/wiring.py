@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 
 from .adapters.notify import EmailNotifier, MultiNotifier, TelegramNotifier
@@ -43,11 +42,17 @@ def build_model(settings: Settings):
     if settings.model == "mock":
         return MockModel()
     if settings.model == "claude":
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise SystemExit("MODEL=claude needs ANTHROPIC_API_KEY in .env (console.anthropic.com -> API keys).")
+        if not settings.anthropic_api_key:
+            raise SystemExit(
+                "MODEL=claude needs ANTHROPIC_API_KEY (or ASSISTANT_ANTHROPIC_API_KEY) in .env or the environment "
+                "(console.anthropic.com -> API keys)."
+            )
+        import anthropic
+
         from .adapters.claude import ClaudeModel  # imported only when used: the mock runs without the SDK
 
-        return ClaudeModel(model=settings.claude_model, effort=settings.claude_effort)
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0, max_retries=2)
+        return ClaudeModel(client, model=settings.claude_model, effort=settings.claude_effort)
     raise ValueError(f"Unknown MODEL {settings.model!r}. Available: mock, claude.")
 
 

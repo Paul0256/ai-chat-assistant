@@ -16,7 +16,9 @@ def _list(value: str) -> list[str]:
 class Settings:
     business_folder: str = "demo/clinic"
     model: str = "mock"
-    # MODEL=claude: the key comes from ANTHROPIC_API_KEY, read by the Anthropic SDK itself.
+    # MODEL=claude. ASSISTANT_ANTHROPIC_API_KEY is an alternative name for hosts that
+    # reserve ANTHROPIC_API_KEY for themselves (e.g. a Claude Code cloud environment).
+    anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-5-5"
     claude_effort: str = "low"
     allowed_origins: list[str] = field(default_factory=list)
@@ -41,6 +43,7 @@ class Settings:
         return cls(
             business_folder=env("BUSINESS_FOLDER", "demo/clinic"),
             model=env("MODEL", "mock").strip().lower(),
+            anthropic_api_key=(env("ANTHROPIC_API_KEY") or env("ASSISTANT_ANTHROPIC_API_KEY") or "").strip(),
             claude_model=env("CLAUDE_MODEL", "claude-sonnet-5-5").strip(),
             claude_effort=env("CLAUDE_EFFORT", "low").strip().lower(),
             allowed_origins=_list(env("ALLOWED_ORIGINS", "")),

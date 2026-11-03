@@ -15,6 +15,7 @@ def clean_env(monkeypatch, tmp_path):
     for key in [
         "BUSINESS_FOLDER", "MODEL", "ALLOWED_ORIGINS", "DAILY_MESSAGE_CAP", "SPREADSHEET_ID",
         "HANDOFF_TELEGRAM_BOT_TOKEN", "HANDOFF_TELEGRAM_CHAT_ID", "SMTP_HOST", "HANDOFF_EMAIL_FROM", "HANDOFF_EMAIL_TO",
+        "ANTHROPIC_API_KEY", "ASSISTANT_ANTHROPIC_API_KEY",
     ]:  # fmt: skip
         monkeypatch.delenv(key, raising=False)
     monkeypatch.chdir(tmp_path)  # no stray .env
@@ -63,15 +64,20 @@ def test_unknown_model_is_a_clear_error():
 
 
 def test_claude_needs_an_api_key(clean_env, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(SystemExit, match="ANTHROPIC_API_KEY"):
         build_app(Settings(business_folder=str(DEMO), model="claude"))
+
+
+@pytest.mark.parametrize("name", ["ANTHROPIC_API_KEY", "ASSISTANT_ANTHROPIC_API_KEY"])
+def test_api_key_is_read_under_either_name(clean_env, monkeypatch, name):
+    monkeypatch.setenv(name, " key-from-env ")
+    assert Settings.from_env().anthropic_api_key == "key-from-env"
 
 
 def test_claude_is_built_from_settings(clean_env, monkeypatch):
     from assistant.adapters.claude import ClaudeModel
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
-    app = build_app(Settings(business_folder=str(DEMO), model="claude", claude_effort="medium"))
-    model = app.assistant.model
+    settings = Settings(business_folder=str(DEMO), model="claude", anthropic_api_key="test-key", claude_effort="medium")
+    model = build_app(settings).assistant.model
     assert isinstance(model, ClaudeModel) and model.name == "claude-sonnet-5-5" and model.effort == "medium"
+    assert model.client.api_key == "test-key"
