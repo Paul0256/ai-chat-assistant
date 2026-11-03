@@ -117,22 +117,36 @@ def check_claude(settings: Settings) -> None:
     source = next((n for n in ("ANTHROPIC_API_KEY", "ASSISTANT_ANTHROPIC_API_KEY") if os.environ.get(n)), None)
     if not key:
         raise SystemExit("No key: set ANTHROPIC_API_KEY or ASSISTANT_ANTHROPIC_API_KEY in .env or the environment.")
-    print(f"Key from {source}: {len(key)} characters, starts with sk-ant-api: {key.startswith('sk-ant-api')}")
+    # The type part (e.g. "sk-ant-api03") is not secret; the rest is.
+    parts = key.split("-")
+    kind = "-".join(parts[:3]) if len(parts) > 3 and parts[0] == "sk" else "(not an sk-... key)"
+    print(f"Key from {source}: {len(key)} characters, type {kind}")
     if any(c in key for c in "\"' \t"):
         print("Warning: the key contains quotes or spaces; paste it without them.")
     for name in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
         if os.environ.get(name):
             print(f"Note: {name} is set in the environment; the assistant ignores it.")
-    client = anthropic.Anthropic(api_key=key, base_url="https://api.anthropic.com", timeout=30.0, max_retries=0)
-    try:
-        reply = client.messages.create(
+
+    def ask(**auth):
+        client = anthropic.Anthropic(**auth, base_url="https://api.anthropic.com", timeout=30.0, max_retries=0)
+        return client.messages.create(
             model=settings.claude_model,
             max_tokens=200,
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": "Reply with the single word: ok"}],
         )
+
+    try:
+        try:
+            reply = ask(api_key=key)
+        except anthropic.AuthenticationError as exc:
+            print(f"x-api-key header: rejected ({exc.message}). Trying Authorization: Bearer...")
+            reply = ask(api_key=None, auth_token=key)
+            print("Bearer works: this key type must be sent as a bearer token.")
     except anthropic.AuthenticationError as exc:
-        raise SystemExit(f"The API rejected the key: {exc.message}. Create a new key and paste it whole.") from None
+        raise SystemExit(
+            f"The API rejected the key both ways: {exc.message}. Create a new key and paste it whole."
+        ) from None
     except anthropic.PermissionDeniedError as exc:
         raise SystemExit(f"The key has no access: {exc.message}") from None
     except anthropic.NotFoundError as exc:
