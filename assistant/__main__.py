@@ -121,6 +121,10 @@ def check_claude(settings: Settings) -> None:
     parts = key.split("-")
     kind = "-".join(parts[:3]) if len(parts) > 3 and parts[0] == "sk" else "(not an sk-... key)"
     print(f"Key from {source}: {len(key)} characters, type {kind}")
+    if "=" in key:
+        print("Warning: the value contains '='. Put only the key after the variable name, not NAME=key again.")
+    if not key.startswith("sk-") and "sk-ant-" in key:
+        print(f"Warning: 'sk-ant-' starts at character {key.index('sk-ant-') + 1}; something is pasted before the key.")
     if any(c in key for c in "\"' \t"):
         print("Warning: the key contains quotes or spaces; paste it without them.")
     for name in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
