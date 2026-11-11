@@ -1,6 +1,9 @@
 # Public demo behind an existing Caddy (see deploy/README.md).
 # No port is published: Caddy reaches the container over its Docker network.
 
+# Own project name, so it never mixes with other stacks whose compose file also sits in deploy/.
+name: ai-chat-assistant
+
 services:
   ai-demo:
     build:
