@@ -6,6 +6,7 @@
     POST /api/handoff     {"conversation_id": "..."}  ("Talk to a person")
     GET  /api/messages    ?conversation_id=...&after=N  staff replies since message N (polled)
     GET  /                demo page of the fictional clinic with the widget on it
+    /t/<slug>/...         the same for each trial assistant (one per business folder in TRIALS_FOLDER)
 
 No business rules here: everything is decided by `Assistant`. The adapter only
 validates input, applies a per-IP limit (a visitor can always start a new
@@ -22,7 +23,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from ...core import Assistant, Reply
@@ -77,7 +78,14 @@ class IpLimiter:
         return True
 
 
-def create_app(assistant: Assistant, allowed_origins: list[str] | None = None, per_ip_per_minute: int = 20) -> FastAPI:
+def create_app(
+    assistant: Assistant,
+    allowed_origins: list[str] | None = None,
+    per_ip_per_minute: int = 20,
+    page_html: str | None = None,
+    trials: dict[str, tuple[Assistant, str]] | None = None,
+) -> FastAPI:
+    """`page_html` replaces the demo page; `trials` maps a slug to (assistant, its page) served under /t/<slug>/."""
     app = FastAPI(title="AI chat assistant", docs_url=None, redoc_url=None, openapi_url=None)
     if allowed_origins:
         # Websites allowed to embed the widget, e.g. ["https://www.clinic.com"].
@@ -123,8 +131,21 @@ def create_app(assistant: Assistant, allowed_origins: list[str] | None = None, p
     async def widget() -> FileResponse:
         return FileResponse(STATIC / "widget.js", media_type="text/javascript")
 
-    @app.get("/")
-    async def demo_page() -> FileResponse:
+    @app.get("/", response_model=None)
+    async def demo_page() -> FileResponse | HTMLResponse:
+        if page_html is not None:
+            return HTMLResponse(page_html)
         return FileResponse(STATIC / "demo.html", media_type="text/html")
 
+    for slug, (trial, html) in (trials or {}).items():
+        app.add_api_route(f"/t/{slug}", _redirect(f"/t/{slug}/"), include_in_schema=False)
+        app.mount(f"/t/{slug}", create_app(trial, per_ip_per_minute=per_ip_per_minute, page_html=html))
+
     return app
+
+
+def _redirect(target: str):
+    async def redirect() -> RedirectResponse:
+        return RedirectResponse(target)
+
+    return redirect

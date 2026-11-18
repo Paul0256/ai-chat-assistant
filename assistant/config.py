@@ -30,6 +30,8 @@ class Settings:
     claude_effort: str = "low"
     allowed_origins: list[str] = field(default_factory=list)
     daily_message_cap: int = 500
+    # Trial assistants: one business folder per subfolder, served at /t/<subfolder>/ (empty = none).
+    trials_folder: str = ""
     # Google Sheets log (optional)
     spreadsheet_id: str = ""
     google_service_account_file: str = "service_account.json"
@@ -55,6 +57,7 @@ class Settings:
             claude_effort=env("CLAUDE_EFFORT", "low").strip().lower(),
             allowed_origins=_list(env("ALLOWED_ORIGINS", "")),
             daily_message_cap=int(env("DAILY_MESSAGE_CAP", "500")),
+            trials_folder=env("TRIALS_FOLDER", "").strip(),
             spreadsheet_id=env("SPREADSHEET_ID", "").strip(),
             google_service_account_file=env("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json"),
             handoff_telegram_bot_token=env("HANDOFF_TELEGRAM_BOT_TOKEN", "").strip(),

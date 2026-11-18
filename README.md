@@ -43,6 +43,20 @@ The demo business lives in `demo/clinic/`: `business.json` (name, phone,
 emergency number) and `knowledge/*.md`. To try your own business, copy the
 folder, edit it, and run `python -m assistant console --business path/to/folder`.
 
+## Trial version from a website
+
+```bash
+python -m assistant build-trial https://www.clinic.com   # needs ANTHROPIC_API_KEY in .env
+python -m assistant eval --business trials/<slug>
+TRIALS_FOLDER=trials python -m assistant web             # http://127.0.0.1:8000/t/<slug>/
+```
+
+`build-trial` reads the website's homepage and its patient pages (FAQ, insurance,
+prices, new patients, contact), and Claude writes the business folder from what
+they say: `business.json`, `knowledge/*.md` as questions and answers, test
+questions, and `sources.txt`. Sites that block automated visits are not read.
+Check the documents and the eval before showing a trial to anyone.
+
 ## Add it to a website
 
 One line before `</body>`:

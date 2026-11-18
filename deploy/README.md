@@ -48,6 +48,33 @@ stack's Docker network. No port of the demo is published.
 5. **Check:** `https://demo.pulauskas.dev` shows the demo clinic. Ask a
    question in the chat window.
 
+## Trial assistants for prospects
+
+A trial is a draft assistant built from a business's public website, served at
+`https://demo.pulauskas.dev/t/<slug>/` next to the demo. One-time:
+
+```bash
+cd /opt/ai-chat-assistant
+mkdir -p trials && sudo chown 10001 trials   # the container's user writes the drafts
+```
+
+For each business (about 1-2 minutes and ~$0.10-0.20 of Claude usage):
+
+```bash
+cd /opt/ai-chat-assistant
+DC="docker compose --env-file .env -f deploy/docker-compose.yml"
+$DC run --rm ai-demo python -m assistant build-trial https://www.clinic.com
+$DC run --rm ai-demo python -m assistant eval --business trials/<slug> --csv trials/<slug>/eval.csv
+$DC restart ai-demo
+```
+
+`build-trial` prints the folder (`trials/<slug>`). Read `trials/<slug>/knowledge/*.md`
+and the eval result before sending the link: everything comes from the pages in
+`sources.txt`, and a wrong fact on the website becomes a wrong answer. Fix a
+document with `nano`, run the eval again and restart. Websites that block automated
+visits are not read; build those by hand. Delete a trial with `sudo rm -r trials/<slug>`
+and a restart.
+
 ## Update
 
 ```bash

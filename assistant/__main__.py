@@ -7,6 +7,7 @@ python -m assistant setup-sheet     create the Conversations and Unanswered tabs
 python -m assistant test-handoff    send a test "Customer wants a person" message to staff
 python -m assistant eval            run the business's test questions through the model (reads .env)
 python -m assistant check-claude    check the Anthropic API key with one tiny request
+python -m assistant build-trial URL a trial assistant from a business's website (reads .env)
 """
 
 from __future__ import annotations
@@ -45,6 +46,10 @@ def main() -> None:
         if name == "eval":
             p.add_argument("--questions", help="JSON test questions (default: <business>/test_questions.json)")
             p.add_argument("--csv", default="eval-results.csv", help="where to write the details")
+    trial = sub.add_parser("build-trial", help="draft a trial assistant from a business's website")
+    trial.add_argument("url", help="the business's website")
+    trial.add_argument("--out", default="trials", help="folder that holds the trials (default: trials)")
+    trial.add_argument("--slug", help="folder name and web address part (default: from the business name)")
     args = parser.parse_args()
 
     settings = Settings.from_env()
@@ -67,6 +72,8 @@ def main() -> None:
         evaluate(settings, args.questions, args.csv)
     elif args.command == "check-claude":
         check_claude(settings)
+    elif args.command == "build-trial":
+        build_trial(settings, args.url, args.out, args.slug)
     else:
         test_handoff(settings)
 
@@ -83,9 +90,11 @@ def run_web(settings: Settings, host: str, port: int, behind_proxy: bool = False
     for warning in app.warnings:
         print(f"Note: {warning}")
     print(f"Model: {settings.model}. Demo page: http://{host}:{port}/")
+    for slug in app.trials:
+        print(f"Trial: http://{host}:{port}/t/{slug}/")
     try:
         uvicorn.run(
-            create_app(app.assistant, allowed_origins=settings.allowed_origins),
+            create_app(app.assistant, allowed_origins=settings.allowed_origins, trials=app.trials),
             host=host,
             port=port,
             log_level="warning",
@@ -114,6 +123,29 @@ def evaluate(settings: Settings, questions: str | None, csv_path: str) -> None:
             f"Cost: ~${usage.cost_usd:.3f} for {usage.requests} model calls "
             f"(~${usage.cost_usd / usage.requests:.4f} per answer; cache read {usage.cache_read:,} tokens)"
         )
+
+
+def build_trial(settings: Settings, url: str, out: str, slug: str | None) -> None:
+    from pathlib import Path
+
+    import anthropic
+
+    from .trial import TrialError, http_client
+    from .trial import build_trial as build
+
+    if not settings.anthropic_api_key:
+        raise SystemExit("build-trial needs ANTHROPIC_API_KEY (or ASSISTANT_ANTHROPIC_API_KEY) in .env")
+    client = anthropic.Anthropic(
+        api_key=settings.anthropic_api_key, base_url="https://api.anthropic.com", timeout=600.0, max_retries=2
+    )
+    print(f"Reading {url} ...")
+    try:
+        with http_client() as http:
+            folder = build(url, Path(out), client, http, model=settings.claude_model, slug=slug)
+    except TrialError as exc:
+        raise SystemExit(str(exc)) from None
+    print(f"OK: {folder}")
+    print(f"Next: python -m assistant eval --business {folder}   (then check {folder}/sources.txt)")
 
 
 def check_claude(settings: Settings) -> None:

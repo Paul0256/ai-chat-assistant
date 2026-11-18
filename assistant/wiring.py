@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
+from html import escape
+from pathlib import Path
 
 from .adapters.notify import EmailNotifier, MultiNotifier, TelegramNotifier
 from .config import Settings
@@ -20,6 +23,7 @@ class App:
     notifier: HandoffNotifier
     warnings: list[str]
     background: list = field(default_factory=list)  # threads to stop on shutdown
+    trials: dict = field(default_factory=dict)  # slug -> (Assistant, page html)
 
     def start_staff_replies(self) -> None:
         """Let staff answer from Telegram (only when Telegram handoff is configured)."""
@@ -96,12 +100,60 @@ def build_app(settings: Settings) -> App:
         notifier = MemoryNotifier()
         warnings.append("No handoff channel configured: 'Talk to a person' requests reach nobody (demo mode).")
 
+    model = build_model(settings)
     assistant = Assistant(
         business,
         knowledge,
-        build_model(settings),
+        model,
         conversation_log,
         notifier,
         limits=Limits(per_day=settings.daily_message_cap),
     )
-    return App(assistant, conversation_log, notifier, warnings)
+    trials = build_trials(settings.trials_folder, model) if settings.trials_folder else {}
+    return App(assistant, conversation_log, notifier, warnings, trials=trials)
+
+
+# A trial is tried by the business itself and a few of its staff: a small daily cap protects the bill.
+TRIAL_DAILY_CAP = 200
+TRIAL_PAGE = Path(__file__).parent / "adapters" / "web" / "static" / "trial.html"
+
+
+def build_trials(folder: str, model) -> dict:
+    """One trial assistant per business folder in `folder`. Conversations stay in memory; nobody is notified."""
+    trials = {}
+    root = Path(folder)
+    if not root.is_dir():
+        log.warning("TRIALS_FOLDER %s does not exist", folder)
+        return trials
+    for path in sorted(p for p in root.iterdir() if (p / "business.json").is_file()):
+        try:
+            business, knowledge = load_business(path)
+        except Exception as exc:  # one broken folder must not stop the others
+            log.warning("Skipping trial %s: %s", path.name, exc)
+            continue
+        assistant = Assistant(
+            business, knowledge, model, MemoryLog(), MemoryNotifier(), limits=Limits(per_day=TRIAL_DAILY_CAP)
+        )
+        trials[path.name] = (assistant, trial_page(path, business))
+    return trials
+
+
+def trial_page(folder: Path, business) -> str:
+    raw = json.loads((folder / "business.json").read_text(encoding="utf-8"))
+    examples = []
+    questions = folder / "test_questions.json"
+    if questions.is_file():
+        examples = [q["question"] for q in json.loads(questions.read_text(encoding="utf-8")) if q["expect"] == "answer"]
+    values = {
+        "name": escape(business.name),
+        "phone": escape(business.phone),
+        "address": escape(business.address),
+        "website": escape(raw.get("website", "")),
+        "color": escape(raw.get("color", "#0f766e")),
+        "api": escape(f"/t/{folder.name}"),
+        "examples": "".join(f"<li>{escape(q)}</li>" for q in examples[:5]),
+    }
+    page = TRIAL_PAGE.read_text(encoding="utf-8")
+    for key, value in values.items():
+        page = page.replace("{{" + key + "}}", value)
+    return page

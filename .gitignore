@@ -13,3 +13,6 @@ __pycache__/
 build/
 dist/
 eval-results.csv
+
+# Trial assistants for prospects stay on the server
+trials/

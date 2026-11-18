@@ -9,6 +9,12 @@ services:
     build:
       context: ..
     env_file: ../.env
+    environment:
+      # Trial assistants for prospects: trials/<slug>/ is served at /t/<slug>/.
+      TRIALS_FOLDER: trials
+    volumes:
+      # Kept on the host (not in git: it holds prospects' data). Owned by uid 10001, the container's user.
+      - ../trials:/app/trials
     restart: unless-stopped
     networks:
       - proxy

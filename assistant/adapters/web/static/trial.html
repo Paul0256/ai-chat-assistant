@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{name}}: website assistant (test version)</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2933; background: #f5f7f9; }
+    .banner { background: #fff7d6; color: #6b5800; font-size: 14px; text-align: center; padding: 8px 16px; }
+    header { background: {{color}}; color: #fff; padding: 22px 24px; }
+    header h1 { margin: 0; font-size: 26px; }
+    header p { margin: 4px 0 0; opacity: .9; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 20px 140px; line-height: 1.55; }
+    .card { background: #fff; border: 1px solid #e1e7ec; border-radius: 12px; padding: 18px 20px; margin: 16px 0; }
+    h2 { font-size: 19px; margin: 0 0 8px; }
+    ul { margin: 6px 0 0; padding-left: 20px; }
+    small { color: #5f6b76; }
+  </style>
+</head>
+<body>
+  <div class="banner">Test version for {{name}}. Nothing is installed on your website.</div>
+  <header>
+    <h1>{{name}}</h1>
+    <p>{{address}} · {{phone}}</p>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Try your assistant</h2>
+      Open the chat in the bottom-right corner and ask what your patients ask. For example:
+      <ul>{{examples}}</ul>
+    </div>
+    <div class="card">
+      <h2>How it works</h2>
+      It answers only from the public information on your website. When it doesn't know, it says so and offers
+      your phone number instead of guessing. It never gives medical advice, and urgent messages get your phone
+      number and 911 right away.
+      <p><small>Prepared from {{website}}. If an answer is wrong or missing, it's because your website says it
+      that way or doesn't say it yet: tell us and it's fixed in minutes. In this test version, "Talk to a person"
+      doesn't reach your team yet.</small></p>
+    </div>
+  </main>
+  <script src="{{api}}/widget.js" data-api="{{api}}" data-title="{{name}}" data-color="{{color}}" defer></script>
+</body>
+</html>
