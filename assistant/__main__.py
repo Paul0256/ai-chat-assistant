@@ -53,7 +53,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = Settings.from_env()
-    if args.business:
+    if getattr(args, "business", None):
         settings = dataclasses.replace(settings, business_folder=args.business)
 
     if args.command == "demo":

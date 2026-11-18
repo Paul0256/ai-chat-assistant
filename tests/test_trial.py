@@ -154,3 +154,15 @@ def test_a_broken_trial_folder_is_skipped(tmp_path):
     (tmp_path / "broken").mkdir()
     (tmp_path / "broken" / "business.json").write_text("{}")
     assert build_trials(str(tmp_path), MockModel()) == {}
+
+
+def test_build_trial_command_parses_and_asks_for_a_key(monkeypatch):
+    import sys
+
+    from assistant.__main__ import main
+
+    for name in ("ANTHROPIC_API_KEY", "ASSISTANT_ANTHROPIC_API_KEY"):
+        monkeypatch.setenv(name, "")
+    monkeypatch.setattr(sys, "argv", ["assistant", "build-trial", "https://brightsmile.example"])
+    with pytest.raises(SystemExit, match="needs ANTHROPIC_API_KEY"):
+        main()
