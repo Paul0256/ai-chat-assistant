@@ -224,6 +224,14 @@ def draft(pages: list[Page], client, model: str = DEFAULT_MODEL) -> dict:
     return json.loads(text)
 
 
+def us_phone(raw: str) -> str:
+    """'(253)7595414' or '253.759.5414' -> '(253) 759-5414'; anything else unchanged."""
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}" if len(digits) == 10 else raw.strip()
+
+
 def slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:40].strip("-") or "trial"
@@ -242,7 +250,7 @@ def write_trial(data: dict, pages: list[Page], out: Path, slug: str | None = Non
     business = {
         "name": name,
         "assistant_name": f"{name} Assistant",
-        "phone": b["phone"].strip() or "the office",
+        "phone": us_phone(b["phone"]) or "the office",
         "email": b["email"].strip(),
         "address": b["address"].strip(),
         "emergency_number": "911",

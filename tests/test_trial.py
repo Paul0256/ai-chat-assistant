@@ -73,7 +73,7 @@ def test_blocked_site_stops_the_build():
 DRAFT = {
     "business": {
         "name": "Bright Smile Dental",
-        "phone": "(253) 555-0142",
+        "phone": "(253)5550142",
         "email": "",
         "address": "2520 N Alder St, Tacoma",
     },
@@ -117,6 +117,7 @@ def test_write_trial_makes_a_loadable_folder(tmp_path):
     business = json.loads((folder / "business.json").read_text())
     assert business["medical"] is True and business["emergency_number"] == "911"
     assert business["website"] == "https://brightsmile.example/"
+    assert business["phone"] == "(253) 555-0142"
     docs = sorted(p.name for p in (folder / "knowledge").iterdir())
     assert docs == ["01-insurance-and-payment.md", "02-hours.md"]
     assert (folder / "knowledge" / "02-hours.md").read_text().startswith("# Hours\n")
