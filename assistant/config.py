@@ -44,6 +44,9 @@ class Settings:
     smtp_password: str = ""
     handoff_email_from: str = ""
     handoff_email_to: list[str] = field(default_factory=list)
+    # Email the owner when someone uses the demo or a trial (needs the SMTP settings above).
+    usage_alert_to: str = ""
+    usage_alert_from: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -68,11 +71,17 @@ class Settings:
             smtp_password=env("SMTP_PASSWORD", ""),
             handoff_email_from=env("HANDOFF_EMAIL_FROM", "").strip(),
             handoff_email_to=_list(env("HANDOFF_EMAIL_TO", "")),
+            usage_alert_to=env("USAGE_ALERT_TO", "").strip(),
+            usage_alert_from=env("USAGE_ALERT_FROM", "").strip(),
         )
 
     @property
     def telegram_handoff(self) -> bool:
         return bool(self.handoff_telegram_bot_token and self.handoff_telegram_chat_id)
+
+    @property
+    def usage_alerts(self) -> bool:
+        return bool(self.smtp_host and self.usage_alert_to and (self.usage_alert_from or self.handoff_email_from))
 
     @property
     def email_handoff(self) -> bool:

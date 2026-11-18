@@ -75,6 +75,22 @@ document with `nano`, run the eval again and restart. Websites that block automa
 visits are not read; build those by hand. Delete a trial with `sudo rm -r trials/<slug>`
 and a restart.
 
+## Usage alerts
+
+To get an email when someone tries the demo or a trial (first message of each
+conversation, and every "talk to a person"), add to `.env` and restart:
+
+```
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=587
+SMTP_USERNAME=resend
+SMTP_PASSWORD=re_...                 # a Resend API key with sending access
+USAGE_ALERT_FROM=Demo alerts <alerts@pulauskas.dev>
+USAGE_ALERT_TO=you@example.com
+```
+
+Leave `HANDOFF_EMAIL_TO` empty: the demo's "talk to a person" stays a demo.
+
 ## Update
 
 ```bash

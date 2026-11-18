@@ -121,7 +121,9 @@ class EmailNotifier:
         return msg
 
     def notify(self, request: HandoffRequest) -> None:
-        msg = self.build_message(request)
+        self.send(self.build_message(request))
+
+    def send(self, msg: EmailMessage) -> None:
         if self._smtp_factory is not None:
             smtp = self._smtp_factory(self.host, self.port)
         elif self.port == 465:

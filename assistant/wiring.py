@@ -100,6 +100,10 @@ def build_app(settings: Settings) -> App:
         notifier = MemoryNotifier()
         warnings.append("No handoff channel configured: 'Talk to a person' requests reach nobody (demo mode).")
 
+    mailer = usage_mailer(settings, business.name)
+    if mailer is not None:
+        conversation_log = alerting(conversation_log, mailer, settings, f"Demo ({business.name})")
+
     model = build_model(settings)
     assistant = Assistant(
         business,
@@ -109,7 +113,13 @@ def build_app(settings: Settings) -> App:
         notifier,
         limits=Limits(per_day=settings.daily_message_cap),
     )
-    trials = build_trials(settings.trials_folder, model) if settings.trials_folder else {}
+    trials = {}
+    if settings.trials_folder:
+        trials = build_trials(
+            settings.trials_folder,
+            model,
+            wrap_log=(lambda log_, name: alerting(log_, mailer, settings, f"Trial: {name}")) if mailer else None,
+        )
     return App(assistant, conversation_log, notifier, warnings, trials=trials)
 
 
@@ -118,8 +128,36 @@ TRIAL_DAILY_CAP = 200
 TRIAL_PAGE = Path(__file__).parent / "adapters" / "web" / "static" / "trial.html"
 
 
-def build_trials(folder: str, model) -> dict:
-    """One trial assistant per business folder in `folder`. Conversations stay in memory; nobody is notified."""
+def usage_mailer(settings: Settings, business_name: str):
+    if not settings.usage_alerts:
+        return None
+    return EmailNotifier(
+        settings.smtp_host,
+        settings.smtp_port,
+        settings.smtp_username,
+        settings.smtp_password,
+        settings.usage_alert_from or settings.handoff_email_from,
+        [settings.usage_alert_to],
+        business_name,
+    )
+
+
+def alerting(conversation_log, mailer, settings: Settings, label: str):
+    from .adapters.usage_alert import UsageAlertLog
+
+    return UsageAlertLog(
+        conversation_log,
+        mailer,
+        settings.usage_alert_from or settings.handoff_email_from,
+        settings.usage_alert_to,
+        label,
+    )
+
+
+def build_trials(folder: str, model, wrap_log=None) -> dict:
+    """One trial assistant per business folder in `folder`. Conversations stay in memory; staff aren't notified.
+
+    `wrap_log(log, business_name)` can wrap each trial's log, e.g. to email the owner when it is used."""
     trials = {}
     root = Path(folder)
     if not root.is_dir():
@@ -131,8 +169,9 @@ def build_trials(folder: str, model) -> dict:
         except Exception as exc:  # one broken folder must not stop the others
             log.warning("Skipping trial %s: %s", path.name, exc)
             continue
+        trial_log = wrap_log(MemoryLog(), business.name) if wrap_log else MemoryLog()
         assistant = Assistant(
-            business, knowledge, model, MemoryLog(), MemoryNotifier(), limits=Limits(per_day=TRIAL_DAILY_CAP)
+            business, knowledge, model, trial_log, MemoryNotifier(), limits=Limits(per_day=TRIAL_DAILY_CAP)
         )
         trials[path.name] = (assistant, trial_page(path, business))
     return trials
