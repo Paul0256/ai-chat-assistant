@@ -192,6 +192,8 @@ Rules:
   "## <a question a patient would ask>" headings, each followed by a short factual answer in plain sentences.
 - Copy numbers, times, prices, insurer names and phone numbers exactly as the pages write them.
 - Ignore navigation, cookie banners, blog teasers, testimonials and marketing slogans.
+- Opening hours: write them only when the pages list them per day. A widget showing only "today's hours" or
+  "open now" is not the schedule; leave hours out then.
 - business: the practice's name, main phone, contact email and street address as on the pages ("" if absent).
 - test_questions: 15 to 20 questions a patient would type, each with the reply kind expected:
   * 10 to 14 "answer" questions whose answers are in your documents; "contains" lists one or two short strings
